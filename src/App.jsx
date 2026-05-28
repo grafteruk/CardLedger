@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 
-// ─── CONCEPT DEMO v4 — CardLedger ────────────────────────────────────────────
-// Pokémon trader reputation platform. Shareable demo: second party + PSA checks
-// are SIMULATED; nothing is saved.
+// ─── CONCEPT DEMO v5 — CardLedger ────────────────────────────────────────────
+// Pokémon trader reputation platform. Demo: second party + PSA checks SIMULATED;
+// photo upload is SIMULATED (real storage comes with the real backend); nothing saved.
+// v5 adds: multiple cards per side of a trade; simulated photo upload for raw/sealed.
 
 const C = { bg:"#0f1419", panel:"#1a2129", panel2:"#222b35", line:"#2d3742",
   ink:"#e8edf2", sub:"#8a97a6", accent:"#3ba776", accentDim:"#2a6b4d",
@@ -18,7 +19,7 @@ function checkCert(cert){ return new Promise(res=>setTimeout(()=>{
   res({ valid:true, ...(CARDS[k]||{card:"Pokemon graded card (PSA record found)",grade:"PSA graded"}) });
 },650)); }
 
-const STEPS=["Item","Terms","Exchange","Receipt","Review","Done"];
+const STEPS=["Items","Terms","Exchange","Receipt","Review","Done"];
 
 export default function App(){
   const [view,setView]=useState("home");
@@ -27,12 +28,12 @@ export default function App(){
     <div style={{minHeight:"100vh",background:C.bg,color:C.ink,fontFamily:"Georgia, serif"}}>
       <div style={{background:"#2a2016",color:C.warn,fontFamily:"sans-serif",fontSize:11.5,
         textAlign:"center",padding:"6px 12px",lineHeight:1.4}}>
-        CONCEPT DEMO — other trader &amp; PSA checks are simulated so you can test solo. Nothing saved.</div>
+        CONCEPT DEMO — other trader, PSA checks &amp; photo upload are simulated. Nothing saved.</div>
       <Header view={view} setView={setView}/>
       <div style={{maxWidth:460,margin:"0 auto",padding:"0 16px 50px"}}>
         {view==="home"&&<Home setView={setView}/>}
         {view==="trade"&&(consented?<TradeFlow/>:<Consent onAgree={()=>setConsented(true)}/>)}
-        {view==="seller"&&<SellerPage setView={setView}/>}
+        {view==="seller"&&<SellerPage/>}
         {view==="fakes"&&<FakeGuide setView={setView}/>}
       </div>
       <Foot/>
@@ -59,14 +60,14 @@ function Home({setView}){return(
   <div style={{paddingTop:26}}>
     <h1 style={{fontSize:27,lineHeight:1.25,margin:"0 0 13px",fontWeight:600}}>Trade cards with people you can actually check.</h1>
     <p style={{color:C.sub,fontSize:15,lineHeight:1.6,margin:"0 0 22px",fontFamily:"sans-serif"}}>
-      Every review is tied to a real, two-sided trade — graded, raw or sealed, shipped or in person. A track record that protects <em>everyone</em> in the deal, and that scammers can't fake or escape.</p>
+      Every review is tied to a real, two-sided trade — graded, raw or sealed, one card or a whole binder, shipped or in person. A track record that protects <em>everyone</em> in the deal.</p>
     <button onClick={()=>setView("trade")} style={pBtn}>Start a trade →</button>
     <button onClick={()=>setView("seller")} style={gBtn}>Look up a trader's record</button>
     <div style={{marginTop:30,display:"grid",gap:11}}>
       <Feat t="Reviews can't be bought" b="Unlocks only after both confirm a completed trade. You review the other party in the role they played — never yourself."/>
       <Feat t="Built on distinct partners over time" b="Standing comes from how many different reputable people you've dealt with, sustained over months — not raw count. Faking that means faking a whole economy."/>
       <Feat t="Scammers can't stay disposable" b="Accounts anchor to your real eBay / TikTok / Insta / YouTube / X history. A burner has no standing — so scammers either avoid CardLedger (a red flag) or get identified."/>
-      <Feat t="Honest about what we can't see" b="We check graded certs against PSA, but we can't authenticate a raw card or sealed box. There the trader's verified record is your protection — and we teach you how to spot fakes."/>
+      <Feat t="Honest about what we can't see" b="We check graded certs against PSA, but can't authenticate raw cards or sealed boxes. There, photos + the trader's verified record are your protection — and we teach you to spot fakes."/>
     </div>
     <div onClick={()=>setView("fakes")} style={{marginTop:14,textAlign:"center",fontFamily:"sans-serif",fontSize:13,color:C.blue,cursor:"pointer"}}>How to spot fake cards &amp; sealed product →</div>
   </div>);}
@@ -80,7 +81,7 @@ function Consent({onAgree}){
   return(<div style={{paddingTop:22}}><Panel>
     <div style={{fontSize:18,fontWeight:600,marginBottom:4}}>Before your first trade</div>
     <div style={{fontFamily:"sans-serif",fontSize:13,color:C.sub,lineHeight:1.6,marginBottom:15}}>Short and honest — what happens to your data.</div>
-    <Bullet h="What we record" b="Trades you complete: items, agreed value, the counterparty, role each played, timestamps, outcome, disputes. Value is logged privately to weight standing — your public page shows totals/tiers, never individual prices."/>
+    <Bullet h="What we record" b="Trades you complete: items, agreed value, the counterparty, role each played, timestamps, outcome, disputes, and any photos you attach. Value is logged privately to weight standing — your public page shows totals/tiers, never individual prices."/>
     <Bullet h="What's public" b="Verified counts &amp; dispute rate as seller and buyer, earned status, linked accounts, and reviews from people you traded with. You pick your handle."/>
     <Bullet h="Your control" b="See everything we hold, correct mistakes, request removal. Genuine dispute records can't simply be deleted, but you can always respond, and disputes can be resolved between the parties."/>
     <Bullet h="Both sides consent" b="A record is only created when both traders join and agree. No one is logged without taking part."/>
@@ -93,36 +94,52 @@ function Bullet({h,b}){return(
     <div style={{fontFamily:"sans-serif",fontSize:13.5,fontWeight:600,marginBottom:2}}>{h}</div>
     <div style={{fontFamily:"sans-serif",fontSize:12.5,color:C.sub,lineHeight:1.55}}>{b}</div></div>);}
 
-function CertCheck({label,onVerified}){
+// One graded item row (cert check)
+function GradedItem({label,onVerified,onRemove}){
   const [cert,setCert]=useState(""),[cr,setCr]=useState(null),[checking,setChecking]=useState(false),[match,setMatch]=useState(false);
   const run=async()=>{setChecking(true);const r=await checkCert(cert);setCr(r);setChecking(false);};
   return(
-    <div style={{marginBottom:14}}>
-      <Lbl>{label}</Lbl>
+    <div style={{marginBottom:12,padding:11,background:C.panel2,borderRadius:9,border:`1px solid ${C.line}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+        <span style={{fontFamily:"sans-serif",fontSize:12,color:C.sub}}>{label}</span>
+        {onRemove&&<span onClick={onRemove} style={{fontFamily:"sans-serif",fontSize:12,color:C.danger,cursor:"pointer"}}>Remove</span>}
+      </div>
       <div style={{display:"flex",gap:8}}>
-        <input value={cert} onChange={e=>{setCert(e.target.value);setCr(null);setMatch(false);onVerified(false);}} placeholder="PSA cert (try 84839201 / 62110473)" style={inp}/>
+        <input value={cert} onChange={e=>{setCert(e.target.value);setCr(null);setMatch(false);onVerified(false);}} placeholder="PSA cert (try 84839201)" style={inp}/>
         <button onClick={run} disabled={!cert||checking} style={{...sBtn,opacity:(!cert||checking)?0.5:1}}>{checking?"…":"Check"}</button>
       </div>
-      {cr&&cr.valid&&(
-        <div style={{marginTop:11,background:C.panel2,border:`1px solid ${C.accentDim}`,borderRadius:9,padding:12}}>
-          <div style={{fontSize:11,color:C.accent,fontFamily:"sans-serif",letterSpacing:1,marginBottom:5}}>PSA RECORD FOUND</div>
-          <div style={{fontSize:14.5}}>{cr.card}</div>
-          <div style={{color:C.sub,fontSize:13,fontFamily:"sans-serif"}}>{cr.grade}</div>
-          <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.line}`,fontSize:12,color:C.sub,fontFamily:"sans-serif",lineHeight:1.5}}>
-            This cert is a real PSA record. <strong style={{color:C.ink}}>We can't see inside a sealed slab</strong> — compare it to PSA's photo for this cert before trusting it.</div>
-          <label style={{...chk,marginTop:11,marginBottom:0}}>
-            <input type="checkbox" checked={match} onChange={e=>{setMatch(e.target.checked);onVerified(e.target.checked);}}/>
-            <span>The slab in hand matches this record &amp; PSA's photo.</span></label>
-        </div>)}
-      {cr&&!cr.valid&&<div style={{marginTop:10,color:C.danger,fontSize:13,fontFamily:"sans-serif"}}>⚠ {cr.message}</div>}
+      {cr&&cr.valid&&(<div style={{marginTop:9,fontSize:13}}>
+        <span style={{color:C.accent,fontFamily:"sans-serif",fontSize:10,letterSpacing:1}}>PSA RECORD ✓ </span>
+        <div style={{marginTop:3}}>{cr.card} <span style={{color:C.sub,fontSize:12}}>· {cr.grade}</span></div>
+        <label style={{...chk,marginTop:8,marginBottom:0,fontSize:12.5}}><input type="checkbox" checked={match} onChange={e=>{setMatch(e.target.checked);onVerified(e.target.checked);}}/><span>Slab in hand matches this record &amp; PSA's photo.</span></label>
+      </div>)}
+      {cr&&!cr.valid&&<div style={{marginTop:8,color:C.danger,fontSize:12.5,fontFamily:"sans-serif"}}>⚠ {cr.message}</div>}
+    </div>);}
+
+// One raw/sealed item row (description + simulated photos)
+function RawItem({label,sealed,onReady,onRemove}){
+  const [desc,setDesc]=useState(""),[photos,setPhotos]=useState(0);
+  return(
+    <div style={{marginBottom:12,padding:11,background:C.panel2,borderRadius:9,border:`1px solid ${C.line}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+        <span style={{fontFamily:"sans-serif",fontSize:12,color:C.sub}}>{label}</span>
+        {onRemove&&<span onClick={onRemove} style={{fontFamily:"sans-serif",fontSize:12,color:C.danger,cursor:"pointer"}}>Remove</span>}
+      </div>
+      <input value={desc} onChange={e=>{setDesc(e.target.value);onReady(!!e.target.value);}} placeholder={sealed?"e.g. Prismatic Evolutions Booster Box":"e.g. Umbreon VMAX Alt Art, NM"} style={inp}/>
+      <div onClick={()=>setPhotos(p=>Math.min(p+1,4))} style={{marginTop:9,padding:"9px 11px",border:`1px dashed ${C.line}`,borderRadius:8,textAlign:"center",cursor:"pointer",fontFamily:"sans-serif",fontSize:12.5,color:C.blue}}>
+        📷 {photos===0?"Add photos of the actual item":`${photos} photo${photos>1?"s":""} added — tap to add more`}</div>
+      {photos>0&&<div style={{display:"flex",gap:5,marginTop:7}}>{Array.from({length:photos}).map((_,i)=><div key={i} style={{width:38,height:38,background:C.line,borderRadius:5,display:"grid",placeItems:"center",fontSize:16}}>🖼️</div>)}</div>}
+      <div style={{fontFamily:"sans-serif",fontSize:11,color:C.sub,marginTop:7,lineHeight:1.5}}>Photos of the real item become part of the record. The buyer confirms what arrives matches them. (Photos show it's the right item in the shown condition — not proof it's genuine.)</div>
     </div>);}
 
 function TradeFlow(){
   const [step,setStep]=useState(0);
   const [form,setForm]=useState("graded");
   const [type,setType]=useState("sell");
-  const [v1,setV1]=useState(false),[v2,setV2]=useState(false);
-  const [desc,setDesc]=useState(""),[value,setValue]=useState("");
+  // multiple items per side
+  const [give,setGive]=useState([{id:1,ready:false}]);
+  const [recv,setRecv]=useState([{id:1,ready:false}]);
+  const [value,setValue]=useState("");
   const [mode,setMode]=useState("");
   const [payment,setPayment]=useState("");
   const [joined,setJoined]=useState(false);
@@ -132,11 +149,22 @@ function TradeFlow(){
   const toggleTag=(t)=>setTags(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
 
   const graded=form==="graded";
-  const twoCerts=graded&&(type==="swap"||type==="swapcash");
+  const isSwap=type==="swap"||type==="swapcash";
   const needsValue=type==="sell"||type==="swapcash";
   const irreversible=["zelle","venmo","cashapp","cash"].includes(payment);
-  const itemOk = graded ? (twoCerts?(v1&&v2):v1) : !!desc;
-  const valueOk = needsValue ? !!value : true;
+
+  const setReady=(side,id,val)=>{const upd=(arr)=>arr.map(x=>x.id===id?{...x,ready:val}:x);side==="give"?setGive(upd):setRecv(upd);};
+  const addItem=(side)=>{const add=(arr)=>[...arr,{id:Math.max(...arr.map(x=>x.id))+1,ready:false}];side==="give"?setGive(add):setRecv(add);};
+  const rmItem=(side,id)=>{const rm=(arr)=>arr.filter(x=>x.id!==id);side==="give"?setGive(rm):setRecv(rm);};
+
+  const giveOk=give.every(x=>x.ready)&&give.length>0;
+  const recvOk=isSwap?(recv.every(x=>x.ready)&&recv.length>0):true;
+  const valueOk=needsValue?!!value:true;
+  const itemsOk=giveOk&&recvOk&&valueOk;
+
+  const ItemRow=(side,item,arr)=> graded
+    ? <GradedItem key={item.id} label={`Card ${arr.indexOf(item)+1}`} onVerified={v=>setReady(side,item.id,v)} onRemove={arr.length>1?()=>rmItem(side,item.id):null}/>
+    : <RawItem key={item.id} label={`Item ${arr.indexOf(item)+1}`} sealed={form==="sealed"} onReady={v=>setReady(side,item.id,v)} onRemove={arr.length>1?()=>rmItem(side,item.id):null}/>;
 
   return(
     <div style={{paddingTop:18}}>
@@ -145,31 +173,32 @@ function TradeFlow(){
       {step===0&&(<Panel>
         <Lbl>What's being traded?</Lbl>
         <div style={{display:"flex",gap:7,marginBottom:12}}>
-          <Toggle on={form==="graded"} onClick={()=>{setForm("graded");setV1(false);setV2(false);setDesc("");}}>Graded slab</Toggle>
-          <Toggle on={form==="raw"} onClick={()=>{setForm("raw");setV1(false);setV2(false);}}>Raw single</Toggle>
-          <Toggle on={form==="sealed"} onClick={()=>{setForm("sealed");setV1(false);setV2(false);}}>Sealed</Toggle>
+          <Toggle on={form==="graded"} onClick={()=>{setForm("graded");setGive([{id:1,ready:false}]);setRecv([{id:1,ready:false}]);}}>Graded slab</Toggle>
+          <Toggle on={form==="raw"} onClick={()=>{setForm("raw");setGive([{id:1,ready:false}]);setRecv([{id:1,ready:false}]);}}>Raw single</Toggle>
+          <Toggle on={form==="sealed"} onClick={()=>{setForm("sealed");setGive([{id:1,ready:false}]);setRecv([{id:1,ready:false}]);}}>Sealed</Toggle>
         </div>
         <Lbl>Trade type</Lbl>
-        <div style={{display:"flex",gap:7,marginBottom:12}}>
-          <Toggle on={type==="sell"} onClick={()=>{setType("sell");setV2(false);}}>Sell / Buy</Toggle>
+        <div style={{display:"flex",gap:7,marginBottom:14}}>
+          <Toggle on={type==="sell"} onClick={()=>setType("sell")}>Sell / Buy</Toggle>
           <Toggle on={type==="swap"} onClick={()=>setType("swap")}>Swap</Toggle>
           <Toggle on={type==="swapcash"} onClick={()=>setType("swapcash")}>Swap + cash</Toggle>
         </div>
 
-        {graded?(<>
-          <CertCheck label={twoCerts?"Card you're giving — cert":"Card — cert"} onVerified={setV1}/>
-          {twoCerts&&<CertCheck label="Card you're receiving — cert" onVerified={setV2}/>}
-        </>):(<>
-          <Lbl>{form==="sealed"?"Describe the sealed product":"Describe the card"}</Lbl>
-          <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder={form==="sealed"?"e.g. Prismatic Evolutions Booster Box (sealed)":"e.g. Umbreon VMAX Alt Art, NM"} style={inp}/>
-          <div style={{marginTop:11,background:"#221a22",border:`1px solid ${C.warn}`,borderRadius:8,padding:11,fontSize:12,color:C.warn,fontFamily:"sans-serif",lineHeight:1.5}}>
-            ⚠ {form==="sealed"?"We can't verify a sealed box is authentic or unweighed.":"Raw cards have no cert — we can't authenticate them."} Your protection here is the trader's verified record + photos. <span style={{textDecoration:"underline"}}>See how to spot fakes</span> before you commit.</div>
-        </>)}
+        {!graded&&<div style={{marginBottom:12,background:"#221a22",border:`1px solid ${C.warn}`,borderRadius:8,padding:10,fontSize:12,color:C.warn,fontFamily:"sans-serif",lineHeight:1.5}}>
+          ⚠ {form==="sealed"?"We can't verify a sealed box is authentic.":"Raw cards have no cert — we can't authenticate them."} Protection here is photos + the trader's record. See the Spot fakes guide before committing.</div>}
 
-        {needsValue&&itemOk&&(<><Lbl style={{marginTop:14}}>{type==="swapcash"?"Cash on top (USD)":"Agreed value (USD)"}</Lbl>
+        <Lbl>{isSwap?"What you're giving":"Item(s)"}</Lbl>
+        {give.map(it=>ItemRow("give",it,give))}
+        <div onClick={()=>addItem("give")} style={addBtn}>+ Add another {graded?"card":"item"}</div>
+
+        {isSwap&&(<><Lbl style={{marginTop:14}}>What you're receiving</Lbl>
+          {recv.map(it=>ItemRow("recv",it,recv))}
+          <div onClick={()=>addItem("recv")} style={addBtn}>+ Add another {graded?"card":"item"}</div></>)}
+
+        {needsValue&&(<><Lbl style={{marginTop:14}}>{type==="swapcash"?"Cash on top (USD)":"Agreed total value (USD)"}</Lbl>
           <input value={value} onChange={e=>setValue(e.target.value)} placeholder={type==="swapcash"?"e.g. 50":"e.g. 480"} style={inp}/>
           <div style={{fontFamily:"sans-serif",fontSize:11,color:C.sub,marginTop:6,lineHeight:1.5}}>Logged privately to weight standing. Public page shows totals/tiers, not this.</div></>)}
-        <Next disabled={!itemOk||!valueOk} onClick={()=>setStep(1)}>Continue</Next>
+        <Next disabled={!itemsOk} onClick={()=>setStep(1)}>Continue</Next>
       </Panel>)}
 
       {step===1&&(<Panel>
@@ -185,8 +214,8 @@ function TradeFlow(){
             {mode==="person"&&<option value="cash">Cash (in person)</option>}
             <option value="venmo">Venmo</option><option value="zelle">Zelle</option><option value="cashapp">Cash App</option>
           </select></>)}
-        {mode&&type==="swap"&&<div style={{marginTop:14,fontFamily:"sans-serif",fontSize:13,color:C.sub,lineHeight:1.5}}>Straight card-for-card swap — no payment leg.</div>}
-        {mode==="person"&&<div style={{marginTop:11,background:C.panel2,border:`1px solid ${C.line}`,borderRadius:8,padding:11,fontSize:12,color:C.sub,fontFamily:"sans-serif",lineHeight:1.5}}>Confirmed by <strong style={{color:C.ink}}>both phones, same place &amp; time</strong> — the proof two real people met. (For raw/sealed in person, this + the trader's record is the whole protection, so check the card yourself.)</div>}
+        {mode&&type==="swap"&&<div style={{marginTop:14,fontFamily:"sans-serif",fontSize:13,color:C.sub,lineHeight:1.5}}>Straight swap — no payment leg.</div>}
+        {mode==="person"&&<div style={{marginTop:11,background:C.panel2,border:`1px solid ${C.line}`,borderRadius:8,padding:11,fontSize:12,color:C.sub,fontFamily:"sans-serif",lineHeight:1.5}}>Confirmed by <strong style={{color:C.ink}}>both phones, same place &amp; time</strong>. For raw/sealed in person, check the card yourself — that + the record is the protection.</div>}
         {irreversible&&<div style={{marginTop:11,background:"#2a1f16",border:`1px solid ${C.warn}`,borderRadius:8,padding:11,fontSize:12,color:C.warn,fontFamily:"sans-serif",lineHeight:1.5}}>⚠ Can't be reversed if it goes wrong. Most reported scams use exactly this plus an off-platform chat.</div>}
         {mode&&(type==="swap"||payment)&&(!joined?(
           <div style={{marginTop:16,background:C.panel2,border:`1px dashed ${C.line}`,borderRadius:9,padding:15,textAlign:"center"}}>
@@ -199,8 +228,7 @@ function TradeFlow(){
       </Panel>)}
 
       {step===2&&(<Panel>
-        {mode==="ship"?(<><div style={{fontFamily:"sans-serif",fontSize:13,color:C.sub,marginBottom:13,lineHeight:1.5}}>Each milestone is timestamped and frozen. {!graded&&"Add photos of the item — they're part of the record."}</div>
-          {!graded&&<div style={{marginBottom:12,fontFamily:"sans-serif",fontSize:12.5,color:C.blue}}>📷 Attach photos (recommended)</div>}
+        {mode==="ship"?(<><div style={{fontFamily:"sans-serif",fontSize:13,color:C.sub,marginBottom:13,lineHeight:1.5}}>Each milestone is timestamped and frozen.</div>
           {!exchanged?<button onClick={()=>setExchanged(true)} style={pBtn}>Mark as shipped (+ tracking)</button>:<div style={mDone}>✓ Marked shipped — {ts()}</div>}</>
         ):(<><div style={{fontFamily:"sans-serif",fontSize:13,color:C.sub,marginBottom:13,lineHeight:1.5}}>Both tap below while you're together (second phone simulated).</div>
           {!exchanged?<button onClick={()=>setExchanged(true)} style={pBtn}>Confirm in-person exchange (both phones)</button>:<div style={mDone}>✓ Both phones confirmed, same place &amp; time — {ts()}</div>}</>)}
@@ -209,10 +237,10 @@ function TradeFlow(){
 
       {step===3&&(<Panel>
         <div style={{fontFamily:"sans-serif",fontSize:13,color:C.sub,marginBottom:13,lineHeight:1.5}}>
-          Receiver's side (simulated). {graded?"Confirm what arrived matches the PSA record.":"Confirm what arrived matches the photos & description."}</div>
+          Receiver's side (simulated). {graded?"Confirm what arrived matches the PSA record(s).":"Confirm what arrived matches the photos & description."}</div>
         {!done?(<>
           <label style={{...chk,marginBottom:14}}><input type="checkbox" checked={bMatch} onChange={e=>setBMatch(e.target.checked)}/>
-            <span>{graded?"The card matches the cert & PSA's photo.":"What I received matches the photos & description."}</span></label>
+            <span>{graded?"Everything matches the cert(s) & PSA's photos.":"What I received matches the photos & description."}</span></label>
           <button onClick={()=>setDone(true)} disabled={!bMatch} style={{...pBtn,opacity:bMatch?1:0.4}}>Confirm received &amp; matches</button>
           <button style={{...gBtn,color:C.danger,borderColor:C.danger}}>Something's wrong — open a dispute</button>
         </>):<div style={mDone}>✓ Received &amp; confirmed matching — {ts()}</div>}
@@ -246,7 +274,7 @@ function TradeFlow(){
       </div></Panel>)}
     </div>);}
 
-function SellerPage({setView}){return(
+function SellerPage(){return(
   <div style={{paddingTop:18}}>
     <Panel>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -287,7 +315,7 @@ function FakeGuide({setView}){return(
     <Panel>
       <div style={{fontSize:18,fontWeight:600,marginBottom:6}}>How to spot fakes</div>
       <div style={{fontFamily:"sans-serif",fontSize:12.5,color:C.warn,lineHeight:1.55,marginBottom:14,background:"#2a2016",border:`1px solid ${C.warn}`,borderRadius:8,padding:11}}>
-        No single test is conclusive — good modern fakes beat any one check. Combine several, and for high value get professional authentication. When you can't be sure of the card, fall back on the trader's verified record.</div>
+        No single test is conclusive — good modern fakes beat any one check. Combine several, and for high value get professional authentication. When unsure, fall back on the trader's verified record.</div>
       <G h="Raw singles">
         <li><b>Light test:</b> real cards have an opaque black core layer — light shouldn't pass through. See-through = almost certainly fake.</li>
         <li><b>Texture &amp; finish:</b> genuine backs have a subtle linen pattern; fakes feel too smooth or too glossy.</li>
@@ -296,9 +324,9 @@ function FakeGuide({setView}){return(
       </G>
       <G h="Sealed product">
         <li><b>Weight:</b> compare to a known-real box's listed weight — resealed/short-packed boxes are often off.</li>
-        <li><b>Wrap &amp; seams:</b> factory shrink-wrap is tight with clean seams; reseals show loose wrap, double seams, or a seam in the wrong place.</li>
+        <li><b>Wrap &amp; seams:</b> factory shrink-wrap is tight with clean seams; reseals show loose wrap or seams in the wrong place.</li>
         <li><b>Print &amp; flaps:</b> blurry print, off colour, or glued (not heat-sealed) flaps are red flags.</li>
-        <li><b>Buy sealed from verified records:</b> you can't see inside — the trader's track record is doing most of the work here.</li>
+        <li><b>Buy sealed from verified records:</b> you can't see inside — the trader's track record does most of the work.</li>
       </G>
       <G h="Graded slabs">
         <li><b>Cert check:</b> verify the number on PSA and that it describes this exact card.</li>
@@ -329,7 +357,7 @@ function Rev({n,t,v,role,note}){return <div style={{background:C.panel,border:`1
   <div style={{fontFamily:"sans-serif",fontSize:13,marginTop:6,lineHeight:1.5}}>{t}</div>
   {note&&<div style={{fontFamily:"sans-serif",fontSize:11,color:C.sub,marginTop:7,fontStyle:"italic"}}>{note}</div>}</div>;}
 function Next({children,onClick,disabled}){return <button onClick={onClick} disabled={disabled} style={{...pBtn,marginTop:16,opacity:disabled?0.4:1,cursor:disabled?"not-allowed":"pointer"}}>{children}</button>;}
-function Foot(){return <div style={{maxWidth:460,margin:"0 auto",padding:"0 16px",fontFamily:"sans-serif",fontSize:11,color:"#55606d",textAlign:"center",lineHeight:1.6}}>Concept demo. Second trader &amp; PSA checks simulated; nothing saved. "CardLedger" is a placeholder name.</div>;}
+function Foot(){return <div style={{maxWidth:460,margin:"0 auto",padding:"0 16px",fontFamily:"sans-serif",fontSize:11,color:"#55606d",textAlign:"center",lineHeight:1.6}}>Concept demo. Second trader, PSA checks &amp; photos simulated; nothing saved. "CardLedger" is a placeholder name.</div>;}
 function ts(){return new Date().toLocaleString("en-US",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});}
 function chipsFor(role,mode){
   const ship=mode==="ship";
@@ -344,3 +372,4 @@ const sBtn={background:C.panel2,color:C.ink,border:`1px solid ${C.line}`,borderR
 const inp={width:"100%",background:C.bg,color:C.ink,border:`1px solid ${C.line}`,borderRadius:8,padding:"11px 12px",fontSize:15,fontFamily:"sans-serif",boxSizing:"border-box"};
 const mDone={marginTop:14,background:C.panel2,border:`1px solid ${C.accentDim}`,borderRadius:8,padding:12,color:C.accent,fontFamily:"sans-serif",fontSize:13.5};
 const chk={display:"flex",gap:9,alignItems:"flex-start",cursor:"pointer",fontFamily:"sans-serif",fontSize:13.5,marginBottom:10,lineHeight:1.4};
+const addBtn={marginTop:2,padding:"9px",border:`1px dashed ${C.line}`,borderRadius:8,textAlign:"center",cursor:"pointer",fontFamily:"sans-serif",fontSize:13,color:C.blue};
